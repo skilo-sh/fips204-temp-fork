@@ -5,7 +5,8 @@ use crate::encodings::{
 };
 use crate::hashing::{expand_a, expand_mask, expand_s, h_xof, sample_in_ball};
 use crate::helpers::{
-    center_mod, infinity_norm, mat_vec_mul, mont_reduce, partial_reduce32, to_mont, vec_add,
+    center_mod, infinity_norm, mat_vec_mul, mont_reduce, partial_reduce32,
+    to_mont, vec_add, full_reduce32
 };
 use crate::high_low::{high_bits, low_bits, make_hint, power2round, use_hint};
 use crate::ntt::{inv_ntt, ntt};
@@ -57,7 +58,13 @@ pub(crate) fn key_gen<
     let t: [R; K] = {
         let s_1_hat: [T; L] = ntt(&s_1);
         let as1_hat: [T; K] = mat_vec_mul(&cap_a_hat, &s_1_hat);
-        vec_add(&inv_ntt(&as1_hat), &s_2)
+        let mut t_not_reduced = vec_add(&inv_ntt(&as1_hat), &s_2);
+        // BEGIN PATCH reduce t mod q
+        t_not_reduced.iter_mut().for_each(|r| r.0.iter_mut().for_each(|e| {
+            *e = full_reduce32(*e);
+        }));
+        // END PATCH reduce t mod q
+        t_not_reduced
     };
 
     // 6: (t_1, t_0) ← Power2Round(t, d)    ▷ Compress t
